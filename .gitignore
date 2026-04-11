@@ -39,3 +39,15 @@
 
 # debug information files
 *.dwo
+*.log
+
+# Qt / Project specific
+build/
+local_qt/
+.venv/
+.qmake.stash
+Makefile.Release
+Makefile.Debug
+graph-constructor
+moc_*
+qrc_*

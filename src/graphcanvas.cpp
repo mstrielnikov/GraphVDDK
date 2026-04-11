@@ -1,6 +1,11 @@
 #include "graphcanvas.h"
 #include <QPainter>
 #include <QLineF>
+#include <QFile>
+#include <QTextStream>
+#include <QGuiApplication>
+#include <QClipboard>
+#include <QUrl>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QHoverEvent>
@@ -380,6 +385,21 @@ void GraphCanvas::wheelEvent(QWheelEvent* event)
     event->accept();
 }
 
+void GraphCanvas::saveStringToFile(const QString& content, const QUrl& url) const {
+    if (url.isEmpty()) return;
+    QFile file(url.toLocalFile());
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << content;
+    }
+}
+
+void GraphCanvas::copyToClipboard(const QString& content) const {
+    if (QClipboard *clipboard = QGuiApplication::clipboard()) {
+        clipboard->setText(content);
+    }
+}
+
 QString GraphCanvas::exportToTikZ() const {
     return QString::fromStdString(TikZExporter::exportToTikZ(m_registry));
 }
@@ -612,7 +632,7 @@ void GraphCanvas::saveSnapshot() {
     m_history.push_back(snap);
     m_historyIndex = m_history.size() - 1;
     
-
+    emit graphChanged();
 }
 
 void GraphCanvas::undo() {

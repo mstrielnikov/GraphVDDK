@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import GraphConstructor 1.0
 
 ApplicationWindow {
@@ -21,10 +22,12 @@ ApplicationWindow {
         }
         Menu {
             title: "Export"
-            MenuItem { text: "SVG"; onTriggered: console.log("SVG:\n", canvas.exportToSVG()) }
-            MenuItem { text: "JSON"; onTriggered: console.log("JSON:\n", canvas.exportToJSON()) }
-            MenuItem { text: "TikZ"; onTriggered: console.log("TikZ:\n", canvas.exportToTikZ()) }
-            MenuItem { text: "CSV"; onTriggered: console.log("CSV:\n", canvas.exportToCSV()) }
+            MenuItem { 
+                text: "SVG"
+                onTriggered: {
+                    svgSaveDialog.open();
+                }
+            }
         }
         Menu {
             title: "Import (Requires Console Binding logic)"
@@ -38,6 +41,16 @@ ApplicationWindow {
             MenuItem { text: "Neural Network"; onTriggered: canvas.pasteExample(1) }
             MenuItem { text: "Binary Tree (H:4)"; onTriggered: canvas.pasteExample(2) }
             MenuItem { text: "Fully Connected (K-6)"; onTriggered: canvas.pasteExample(3) }
+        }
+        Menu {
+            title: "View"
+            MenuItem {
+                text: "Toggle Code Panel"
+                onTriggered: {
+                    codeViewPanel.visible = !codeViewPanel.visible;
+                    if (codeViewPanel.visible) updateCodeView();
+                }
+            }
         }
         Menu {
             title: "Page"
@@ -100,6 +113,25 @@ ApplicationWindow {
             canvas.setNodeLabelPosition(targetEntity, positionDropdown.currentIndex);
         }
         onOpened: captionInput.forceActiveFocus()
+    }
+
+    FileDialog {
+        id: svgSaveDialog
+        title: "Save SVG"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["SVG files (*.svg)"]
+        onAccepted: {
+            canvas.saveStringToFile(canvas.exportToSVG(), svgSaveDialog.selectedFile);
+        }
+    }
+
+    FileDialog {
+        id: codeSaveDialog
+        title: "Save Output"
+        fileMode: FileDialog.SaveFile
+        onAccepted: {
+            canvas.saveStringToFile(codeTextArea.text, codeSaveDialog.selectedFile);
+        }
     }
 
     Shortcut {
@@ -264,6 +296,93 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+
+        Rectangle {
+            id: codeViewPanel
+            SplitView.preferredWidth: 300
+            SplitView.minimumWidth: 200
+            color: "#2b2b2b"
+            visible: false
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                TabBar {
+                    id: codeTypeBar
+                    Layout.fillWidth: true
+                    background: Rectangle { color: "#3c3f41" }
+                    
+                    TabButton { 
+                        text: "TikZ" 
+                        contentItem: Text { text: parent.text; color: "white"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: codeTypeBar.currentIndex === 0 ? "#4b6eaf" : "transparent" }
+                    }
+                    TabButton { 
+                        text: "JSON"
+                        contentItem: Text { text: parent.text; color: "white"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: codeTypeBar.currentIndex === 1 ? "#4b6eaf" : "transparent" }
+                    }
+                    TabButton { 
+                        text: "CSV"
+                        contentItem: Text { text: parent.text; color: "white"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle { color: codeTypeBar.currentIndex === 2 ? "#4b6eaf" : "transparent" }
+                    }
+                    
+                    onCurrentIndexChanged: updateCodeView()
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: 5
+                    Button {
+                        text: "Copy"
+                        onClicked: {
+                            canvas.copyToClipboard(codeTextArea.text);
+                        }
+                    }
+                    Button {
+                        text: "Save..."
+                        onClicked: {
+                            codeSaveDialog.open()
+                        }
+                    }
+                }
+
+                ScrollView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    TextArea {
+                        id: codeTextArea
+                        color: "#a9b7c6"
+                        font.family: "Monospace"
+                        readOnly: true
+                        wrapMode: TextEdit.NoWrap
+                        background: Rectangle { color: "#2b2b2b" }
+                    }
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: canvas
+        function onGraphChanged() {
+            if (codeViewPanel.visible) {
+                updateCodeView();
+            }
+        }
+    }
+
+    function updateCodeView() {
+        if (!codeViewPanel.visible) return;
+        if (codeTypeBar.currentIndex === 0) {
+            codeTextArea.text = canvas.exportToTikZ();
+        } else if (codeTypeBar.currentIndex === 1) {
+            codeTextArea.text = canvas.exportToJSON();
+        } else if (codeTypeBar.currentIndex === 2) {
+            codeTextArea.text = canvas.exportToCSV();
         }
     }
 }

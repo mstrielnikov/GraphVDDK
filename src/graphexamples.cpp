@@ -37,18 +37,21 @@ void injectNeuralNet(entt::registry& reg, float offsetX, float offsetY) {
         auto n = reg.create();
         reg.emplace<Position>(n, offsetX + 20.f, offsetY + 50.f + i * 40.f);
         reg.emplace<Style>(n, 0, 15.f);
+        reg.emplace<Label>(n, "", LabelPosition::Center);
         L1.push_back(n);
     }
     for(int i=0; i<5; i++) { 
         auto n = reg.create();
         reg.emplace<Position>(n, offsetX + 100.f, offsetY + 10.f + i * 40.f);
         reg.emplace<Style>(n, 100, 15.f);
+        reg.emplace<Label>(n, "", LabelPosition::Center);
         L2.push_back(n);
     }
     for(int i=0; i<2; i++) {
         auto n = reg.create();
         reg.emplace<Position>(n, offsetX + 180.f, offsetY + 70.f + i * 40.f);
         reg.emplace<Style>(n, 200, 15.f);
+        reg.emplace<Label>(n, "", LabelPosition::Center);
         L3.push_back(n);
     }
     for(auto n1 : L1) for(auto n2 : L2) {
@@ -72,6 +75,7 @@ void injectBinaryTree(entt::registry& reg, float offsetX, float offsetY) {
         auto n = reg.create();
         reg.emplace<Position>(n, x, y);
         reg.emplace<Style>(n, level * 50, 15.f);
+        reg.emplace<Label>(n, "", LabelPosition::Center);
         nodes.push_back(n);
         if (i > 0) {
             int parent = (i - 1) / 2;
@@ -94,6 +98,7 @@ void injectK6(entt::registry& reg, float offsetX, float offsetY) {
             cy + r * std::sin(angle)
         );
         reg.emplace<Style>(n, i * 40, 15.f);
+        reg.emplace<Label>(n, "", LabelPosition::Center);
         nodes.push_back(n);
     }
     for(int i=0; i<6; i++) {

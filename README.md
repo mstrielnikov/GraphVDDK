@@ -1,4 +1,4 @@
-s# Graph Constructor Minimal Starter (EnTT + Qt Quick)
+# Graph Visual Document Development Kit (Graph VDDK)
 
 Game-engine-style ECS (EnTT) + precise page-sized canvas (A4 mm) + TikZ export + OpenGL option + WASM browser target.
 

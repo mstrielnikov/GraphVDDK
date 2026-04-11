@@ -40,6 +40,8 @@ public:
     Q_INVOKABLE QString exportToJSON() const;
     Q_INVOKABLE QString exportToCSV() const;
     Q_INVOKABLE void exportToPNG(const QString& filePath) const;
+    Q_INVOKABLE void saveStringToFile(const QString& content, const QUrl& url) const;
+    Q_INVOKABLE void copyToClipboard(const QString& content) const;
     
     Q_INVOKABLE void importFromJSON(const QString& jsonString);
     Q_INVOKABLE void importFromCSV(const QString& csvString);
@@ -65,6 +67,7 @@ public:
 
 signals:
     void zoomChanged();
+    void graphChanged();
     void nodeRightClicked(int entityId, const QString& currentText, float x, float y);
     void canvasRightClicked(float x, float y);
 

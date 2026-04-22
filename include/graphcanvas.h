@@ -8,20 +8,8 @@
 #include <QTimer>
 #include <vector>
 
-struct Position { float x = 100.f, y = 100.f; };  // mm
-enum class LabelPosition { Center, Top, Bottom, Left, Right };
-struct Label { std::string text = ""; LabelPosition pos = LabelPosition::Center; };
-struct Edge { entt::entity source; entt::entity target; };
-struct Selected {};
-
-struct CopiedNode { float x, y; int shade; float radius; std::string text; LabelPosition pos; bool borderless; };
-
-struct SnapshotNode { int id; float x, y; int shade; float radius; std::string text; LabelPosition pos; bool borderless; };
-struct SnapshotEdge { int sourceId, targetId; };
-struct Snapshot { std::vector<SnapshotNode> nodes; std::vector<SnapshotEdge> edges; };
-// shade: 0 = black fill (solid), 255 = white fill, mid-values = grey.
-// Follows LaTeX TikZ convention: fill=black!<shade>%
-struct Style { int shade = 0; float radius = 20.f; bool borderless = false; };
+#include "components.h"
+#include "history_manager.h"
 
 class GraphCanvas : public QQuickPaintedItem
 {
@@ -80,16 +68,15 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
-    void drawGraph(QPainter* painter) const;
     QPointF mapToScene(const QPointF& pos) const;
     void saveSnapshot();
+
+    HistoryManager m_historyManager;
 
     entt::registry m_registry;
     entt::entity m_dragged = entt::null;
     std::unordered_map<entt::entity, QPointF> m_dragStartPositions;
     QPointF m_dragSceneStart;
-    std::vector<Snapshot> m_history;
-    int m_historyIndex = -1;
     std::vector<CopiedNode> m_clipboard;
 
     QPointF m_panInitialStart;

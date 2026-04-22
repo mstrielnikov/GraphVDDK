@@ -13,12 +13,10 @@
 #include <vector>
 #include "graphexamples.h"
 #include "tikz_exporter.h"
+#include "graph_serializer.h"
+#include "graph_renderer.h"
 #include <QSvgGenerator>
 #include <QBuffer>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QImage>
 
 // Constants
 constexpr float GRID_SIZE = 10.0f;
@@ -103,118 +101,32 @@ void GraphCanvas::paint(QPainter* painter)
     painter->translate(m_pan);
     painter->scale(m_zoom, m_zoom);
 
-    // Drop Shadow for Document
-    painter->fillRect(QRectF(2, 2, 210, 297), QColor(0, 0, 0, 50));
-    // White A4 Document
-    painter->fillRect(QRectF(0, 0, 210, 297), Qt::white);
+    // Grid and decorations
+    GraphRenderer::drawWorkspace(painter, boundingRect());
 
-    // Page border (A4)
-    painter->setPen(QPen(Qt::black, 1));
-    painter->drawRect(0, 0, 210, 297);
-
-    // Page margins (e.g., 30mm)
-    painter->setPen(QPen(Qt::gray, 1, Qt::DashLine));
-    painter->drawRect(30, 30, 210-60, 297-60);
-
-    // Grid (10mm)
-    painter->setPen(QPen(QColor(220, 220, 220, 100), 1));
-    for (int x = 10; x < 210; x += 10) painter->drawLine(x, 0, x, 297);
-    for (int y = 10; y < 297; y += 10) painter->drawLine(0, y, 210, y);
-
-    drawGraph(painter);
+    GraphRenderer::drawGraph(painter, m_registry);
 
     if (m_drawingEdgeSource != entt::null) {
         const auto& p1 = m_registry.get<Position>(m_drawingEdgeSource);
-        painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
-        painter->drawLine(QPointF(p1.x, p1.y), m_drawingEdgeEnd);
+        GraphRenderer::drawPendingEdge(painter, QPointF(p1.x, p1.y), m_drawingEdgeEnd);
+    }
+
+    if (m_isBoxSelecting) {
+        GraphRenderer::drawSelectionBox(painter, m_boxSelectStart, m_boxSelectEnd);
     }
     
     painter->restore();
+}
+
+void GraphCanvas::saveSnapshot() {
+    m_historyManager.saveSnapshot(m_registry);
+    emit graphChanged();
 }
 
 QPointF GraphCanvas::mapToScene(const QPointF& pos) const
 {
     return (pos - m_pan) / m_zoom;
 }
-
-void GraphCanvas::drawGraph(QPainter* painter) const
-{
-    // Draw edges
-    m_registry.view<Edge>().each([&](auto /*entity*/, const auto& edge) {
-        if (m_registry.valid(edge.source) && m_registry.valid(edge.target)) {
-            const auto& p1 = m_registry.get<Position>(edge.source);
-            const auto& p2 = m_registry.get<Position>(edge.target);
-            painter->setPen(QPen(Qt::darkGray, 2));
-            painter->drawLine(QPointF(p1.x, p1.y), QPointF(p2.x, p2.y));
-        }
-    });
-
-    if (m_drawingEdgeSource != entt::null && m_registry.valid(m_drawingEdgeSource)) {
-        const auto& p1 = m_registry.get<Position>(m_drawingEdgeSource);
-        painter->setPen(QPen(Qt::green, 2, Qt::DashLine));
-        painter->drawLine(QPointF(p1.x, p1.y), m_drawingEdgeEnd);
-    }
-
-    // Draw nodes
-    m_registry.view<Position, Label, Style>().each([&](auto entity, const auto& pos, const auto& label, const auto& style) {
-        if (!style.borderless) {
-            painter->setBrush(QColor(style.shade, style.shade, style.shade));
-            if (m_registry.all_of<Selected>(entity)) {
-                painter->setPen(QPen(QColor("#3399FF"), 3));
-            } else {
-                painter->setPen(QPen(Qt::black, 2));
-            }
-            painter->drawEllipse(QPointF(pos.x, pos.y), style.radius, style.radius);
-        } else {
-            if (m_registry.all_of<Selected>(entity)) {
-                painter->setBrush(Qt::NoBrush);
-                painter->setPen(QPen(QColor(51, 153, 255, 150), 2, Qt::DashLine));
-                painter->drawEllipse(QPointF(pos.x, pos.y), style.radius, style.radius);
-            }
-        }
-
-        QRectF textRect;
-        int align = Qt::AlignCenter;
-        float pd = 4.0f;
-
-        switch(label.pos) {
-            case LabelPosition::Center:
-                textRect = QRectF(pos.x-style.radius, pos.y-style.radius, style.radius*2, style.radius*2);
-                painter->setPen(style.shade < 128 ? Qt::white : Qt::black);
-                break;
-            case LabelPosition::Top:
-                textRect = QRectF(pos.x-style.radius*3, pos.y-style.radius-20-pd, style.radius*6, 20);
-                align = Qt::AlignBottom | Qt::AlignHCenter;
-                painter->setPen(Qt::black);
-                break;
-            case LabelPosition::Bottom:
-                textRect = QRectF(pos.x-style.radius*3, pos.y+style.radius+pd, style.radius*6, 20);
-                align = Qt::AlignTop | Qt::AlignHCenter;
-                painter->setPen(Qt::black);
-                break;
-            case LabelPosition::Left:
-                textRect = QRectF(pos.x-style.radius-40-pd, pos.y-style.radius, 40, style.radius*2);
-                align = Qt::AlignRight | Qt::AlignVCenter;
-                painter->setPen(Qt::black);
-                break;
-            case LabelPosition::Right:
-                textRect = QRectF(pos.x+style.radius+pd, pos.y-style.radius, 40, style.radius*2);
-                align = Qt::AlignLeft | Qt::AlignVCenter;
-                painter->setPen(Qt::black);
-                break;
-        }
-
-        painter->drawText(textRect, align, QString::fromStdString(label.text));
-    });
-
-    if (m_isBoxSelecting) {
-        painter->setPen(QPen(QColor("#3399FF"), 2, Qt::DashLine));
-        painter->setBrush(QColor(51, 153, 255, 30));
-        QRectF sel = QRectF(m_boxSelectStart, m_boxSelectEnd).normalized();
-        painter->drawRect(sel);
-    }
-}
-
 
 void GraphCanvas::mousePressEvent(QMouseEvent* event)
 {
@@ -412,7 +324,7 @@ QString GraphCanvas::exportToSVG() const {
     generator.setSize(QSize(210, 297));
     generator.setViewBox(QRect(0, 0, 210, 297));
     QPainter painter(&generator);
-    drawGraph(&painter);
+    GraphRenderer::drawGraph(&painter, m_registry);
     painter.end();
     QString svgData = QString::fromUtf8(buffer.data());
     
@@ -424,28 +336,7 @@ QString GraphCanvas::exportToSVG() const {
 }
 
 QString GraphCanvas::exportToJSON() const {
-    QJsonArray nodesArr;
-    m_registry.view<Position, Label, Style>().each([&](auto e, const auto& p, const auto& l, const auto& s) {
-        QJsonObject n;
-        n["id"] = (int)e;
-        n["x"] = p.x; n["y"] = p.y;
-        n["label"] = QString::fromStdString(l.text);
-        n["labelPos"] = static_cast<int>(l.pos);
-        n["shade"] = s.shade;
-        n["radius"] = s.radius;
-        n["borderless"] = s.borderless;
-        nodesArr.append(n);
-    });
-    QJsonArray edgesArr;
-    m_registry.view<Edge>().each([&](auto /*e*/, const auto& edge) {
-        QJsonObject o; o["source"] = (int)edge.source; o["target"] = (int)edge.target;
-        edgesArr.append(o);
-    });
-    QJsonObject docObj;
-    docObj["nodes"] = nodesArr;
-    docObj["edges"] = edgesArr;
-    QJsonDocument doc(docObj);
-    return QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    return GraphSerializer::toJSON(m_registry);
 }
 
 void GraphCanvas::exportToPNG(const QString& filePath) const {
@@ -453,7 +344,7 @@ void GraphCanvas::exportToPNG(const QString& filePath) const {
     image.fill(Qt::white);
     QPainter painter(&image);
     painter.scale(4, 4); // scale up for high-res PNG
-    drawGraph(&painter);
+    GraphRenderer::drawGraph(&painter, m_registry);
     painter.end();
     image.save(filePath);
 }
@@ -616,178 +507,54 @@ void GraphCanvas::selectAll() {
     update();
 }
 
-void GraphCanvas::saveSnapshot() {
-    Snapshot snap;
-    m_registry.view<Position, Label, Style>().each([&](auto e, const auto& p, const auto& l, const auto& s) {
-        snap.nodes.push_back({(int)e, p.x, p.y, s.shade, s.radius, l.text, l.pos, s.borderless});
-    });
-    m_registry.view<Edge>().each([&](auto, const auto& edge) {
-        snap.edges.push_back({(int)edge.source, (int)edge.target});
-    });
-
-    if (m_historyIndex >= 0 && m_historyIndex < (int)m_history.size() - 1) {
-        m_history.erase(m_history.begin() + m_historyIndex + 1, m_history.end());
-    }
-
-    m_history.push_back(snap);
-    m_historyIndex = m_history.size() - 1;
-    
-    emit graphChanged();
-}
-
 void GraphCanvas::undo() {
-    if (m_historyIndex > 0) {
-        m_historyIndex--;
-        const auto& snap = m_history[m_historyIndex];
-
-        m_registry.clear();
+    if (m_historyManager.undo(m_registry)) {
         m_dragged = entt::null;
         m_drawingEdgeSource = entt::null;
         m_dragStartPositions.clear();
-
-        std::unordered_map<int, entt::entity> mapping;
-        for (const auto& n : snap.nodes) {
-            auto entity = m_registry.create();
-            m_registry.emplace<Position>(entity, n.x, n.y);
-            m_registry.emplace<Style>(entity, n.shade, n.radius);
-            m_registry.emplace<Label>(entity, n.text, n.pos);
-            if (m_clipboard.empty()) {} // placeholder use
-            mapping[n.id] = entity;
-        }
-
-        for (const auto& e : snap.edges) {
-            auto entity = m_registry.create();
-            if (mapping.count(e.sourceId) && mapping.count(e.targetId)) {
-                m_registry.emplace<Edge>(entity, mapping[e.sourceId], mapping[e.targetId]);
-            }
-        }
-    
+        emit graphChanged();
         update();
     }
 }
 
 void GraphCanvas::redo() {
-    if (m_historyIndex < static_cast<int>(m_history.size()) - 1) {
-        m_historyIndex++;
-        const auto& snap = m_history[m_historyIndex];
-
-        m_registry.clear();
+    if (m_historyManager.redo(m_registry)) {
         m_dragged = entt::null;
         m_drawingEdgeSource = entt::null;
         m_dragStartPositions.clear();
-
-        std::unordered_map<int, entt::entity> mapping;
-        for (const auto& n : snap.nodes) {
-            auto entity = m_registry.create();
-            m_registry.emplace<Position>(entity, n.x, n.y);
-            m_registry.emplace<Style>(entity, n.shade, n.radius, n.borderless);
-            m_registry.emplace<Label>(entity, n.text, n.pos);
-            mapping[n.id] = entity;
-        }
-
-        for (const auto& e : snap.edges) {
-            auto entity = m_registry.create();
-            if (mapping.count(e.sourceId) && mapping.count(e.targetId)) {
-                m_registry.emplace<Edge>(entity, mapping[e.sourceId], mapping[e.targetId]);
-            }
-        }
-    
+        emit graphChanged();
         update();
     }
 }
 
 void GraphCanvas::clearWorkspace() {
     m_registry.clear();
+    m_historyManager.clear();
     saveSnapshot();
     update();
 }
 
 QString GraphCanvas::exportToCSV() const {
-    QString csv = "TYPE,id,x,y,label,shade,radius,pos\n";
-    m_registry.view<Position, Label, Style>().each([&](auto e, const auto& p, const auto& l, const auto& s) {
-        csv += QString("NODE,%1,%2,%3,%4,%5,%6,%7\n").arg((int)e).arg(p.x).arg(p.y).arg(QString::fromStdString(l.text)).arg(s.shade).arg(s.radius).arg((int)l.pos);
-    });
-    m_registry.view<Edge>().each([&](auto, const auto& edge) {
-        csv += QString("EDGE,%1,%2,,,,,\n").arg((int)edge.source).arg((int)edge.target);
-    });
-    return csv;
+    return GraphSerializer::toCSV(m_registry);
 }
 
 void GraphCanvas::importFromCSV(const QString& csvString) {
-    QStringList lines = csvString.split('\n', Qt::SkipEmptyParts);
-    if (lines.isEmpty()) return;
-
-    m_registry.clear();
-    std::unordered_map<int, entt::entity> mapping;
-
-    for (int i = 1; i < lines.size(); ++i) { // skip header
-        QStringList cols = lines[i].split(',');
-        if (cols.isEmpty()) continue;
-        if (cols[0] == "NODE" && cols.size() >= 8) {
-            auto entity = m_registry.create();
-            mapping[cols[1].toInt()] = entity;
-            m_registry.emplace<Position>(entity, cols[2].toFloat(), cols[3].toFloat());
-            m_registry.emplace<Label>(entity, cols[4].toStdString(), static_cast<LabelPosition>(cols[7].toInt()));
-            m_registry.emplace<Style>(entity, cols[5].toInt(), cols[6].toFloat());
-        } else if (cols[0] == "EDGE" && cols.size() >= 3) {
-            int src = cols[1].toInt();
-            int tgt = cols[2].toInt();
-            if (mapping.count(src) && mapping.count(tgt)) {
-                auto edgeEntity = m_registry.create();
-                m_registry.emplace<Edge>(edgeEntity, mapping[src], mapping[tgt]);
-            }
-        }
-    }
-    
-    m_history.clear();
-    m_historyIndex = -1;
+    GraphSerializer::fromCSV(m_registry, csvString);
+    m_historyManager.clear();
     saveSnapshot();
-
     update();
 }
 
 void GraphCanvas::importFromJSON(const QString& jsonString) {
-    QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8());
-    if (doc.isNull() || !doc.isObject()) return;
-    QJsonObject docObj = doc.object();
-    m_registry.clear();
-
-    std::unordered_map<int, entt::entity> mapping;
-    QJsonArray nodesArr = docObj["nodes"].toArray();
-    for (int i = 0; i < nodesArr.size(); ++i) {
-        QJsonObject n = nodesArr[i].toObject();
-        auto entity = m_registry.create();
-        int oldId = n["id"].toInt();
-        mapping[oldId] = entity;
-        m_registry.emplace<Position>(entity, static_cast<float>(n["x"].toDouble()), static_cast<float>(n["y"].toDouble()));
-        m_registry.emplace<Style>(entity, n["shade"].toInt(), static_cast<float>(n["radius"].toDouble()), n["borderless"].toBool());
-        m_registry.emplace<Label>(entity, n["label"].toString().toStdString(), static_cast<LabelPosition>(n["labelPos"].toInt()));
-    }
-
-    QJsonArray edgesArr = docObj["edges"].toArray();
-    for (int i = 0; i < edgesArr.size(); ++i) {
-        QJsonObject o = edgesArr[i].toObject();
-        int src = o["source"].toInt();
-        int tgt = o["target"].toInt();
-        if (mapping.count(src) && mapping.count(tgt)) {
-            auto edgeEntity = m_registry.create();
-            m_registry.emplace<Edge>(edgeEntity, mapping[src], mapping[tgt]);
-        }
-    }
-
-    m_history.clear();
-    m_historyIndex = -1;
+    GraphSerializer::fromJSON(m_registry, jsonString);
+    m_historyManager.clear();
     saveSnapshot();
-
     update();
 }
 
 void GraphCanvas::importFromSVG(const QString& svgString) {
-    int startIdx = svgString.indexOf("<!-- GRAPH_DATA_BEGIN");
-    int endIdx = svgString.indexOf("GRAPH_DATA_END -->");
-    if (startIdx != -1 && endIdx != -1) {
-        startIdx += 21; // length of begin block
-        QString jsonStr = svgString.mid(startIdx, endIdx - startIdx).trimmed();
+    QString jsonStr = GraphSerializer::extractJSONFromSVG(svgString);
+    if (!jsonStr.isEmpty()) {
         importFromJSON(jsonStr);
     }
 }
